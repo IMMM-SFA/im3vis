@@ -1,3 +1,6 @@
+# sys files
+.DS_Store
+
 # pycharm
 .idea
 
