@@ -1,16 +1,14 @@
 import tempfile
 import pkg_resources
 
-import numpy as np
 import pandas as pd
 import seaborn as sns; sns.set()
 import geopandas as gpd
 import rasterio
 
 from shapely.geometry import Point
-from rasterio.io import MemoryFile
 from rasterio import features
-from rasterio.plot import show, show_hist
+from rasterio.plot import show
 from matplotlib import pyplot as plt
 
 
@@ -139,3 +137,40 @@ def get_conus_metadata():
     meta.update(compress='lzw')
 
     return meta
+
+
+def plot_gcam_conus_basin(gcam_df, target_year, landclass, lc_mapping={'Forest': 'forest', 'ProtectedUnmanagedForest': 'forest', 'UnmanagedForest': 'forest'}):
+    """Generate a plot of GCAM land allocation by basin for the CONUS."""
+
+    gxf = gpd.read_file(pkg_resources.resource_filename('im3vis', 'data/conus_basins.shp'))
+
+    # only account for forest mapping for demonstration
+    gcam_df['demeter_lc'] = gcam_df['landclass'].map(lc_mapping)
+
+    # only keep forest classes in the USA
+    gcam_df = gcam_df.loc[(gcam_df['demeter_lc'] == landclass) & (gcam_df['region'] == 'USA')].copy()
+
+    # only keep what we need
+    gcam_us = gcam_df[['metric_id', 'demeter_lc', target_year]].copy()
+
+    # group by metric id
+    grp_us = gcam_us.groupby('metric_id').sum()
+    grp_us.reset_index(inplace=True)
+
+    # rename metric id field
+    grp_us.rename(columns={'metric_id': 'basin_id'}, inplace=True)
+
+    # merge with spatial boundaries
+    mdf = gxf.merge(grp_us, on='basin_id')
+
+    fig, ax = plt.subplots(1, 1)
+    mdf.plot(column=target_year,
+             ax=ax,
+             legend=True,
+             figsize=(15, 10),
+             edgecolor='grey',
+             legend_kwds={'label': f"GCAM land allocation for {landclass} in {target_year} (thous km)",
+                          'orientation': "horizontal"},
+             cmap='viridis')
+
+    return mdf
