@@ -1,0 +1,5 @@
+include README.md
+include LICENSE
+include DISCLAIMER
+include notebooks/*.*
+include im3vis/data/*.*

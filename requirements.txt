@@ -1,0 +1,6 @@
+pandas>=0.19
+rasterio>=1.0
+geopandas>=0.7.0
+seaborn>=0.10.1
+shapely>=1.7.0
+matplotlib>=3.3.2
