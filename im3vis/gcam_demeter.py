@@ -139,10 +139,12 @@ def get_conus_metadata():
     return meta
 
 
-def plot_gcam_conus_basin(gcam_df, target_year, landclass, lc_mapping={'Forest': 'forest', 'ProtectedUnmanagedForest': 'forest', 'UnmanagedForest': 'forest'}):
+def plot_gcam_conus_basin(gcam_df, target_year, landclass):
     """Generate a plot of GCAM land allocation by basin for the CONUS."""
 
     gxf = gpd.read_file(pkg_resources.resource_filename('im3vis', 'data/conus_basins.shp'))
+
+    lc_mapping = gcam_to_demeter_lc_map()
 
     # only account for forest mapping for demonstration
     gcam_df['demeter_lc'] = gcam_df['landclass'].map(lc_mapping)
@@ -174,3 +176,66 @@ def plot_gcam_conus_basin(gcam_df, target_year, landclass, lc_mapping={'Forest':
              cmap='viridis')
 
     return mdf
+
+
+def plot_gcam_reclassified(gcam_df, landclass, start_yr=2015, through_yr=2100, interval=5):
+
+    """Plot GCAM landclass allocation over a time period reclassified to Demeter land cover types."""
+
+    yrs = [str(i) for i in range(start_yr, through_yr + interval, interval)]
+
+    lc_mapping = gcam_to_demeter_lc_map()
+
+    # US corn allocation through the end of the century
+    us_df = gcam_df.loc[gcam_df['region'] == 'USA'].copy()
+
+    # bin gcam land classes into demeter land classes
+    us_df['demeter_lc'] = us_df['landclass'].map(lc_mapping)
+
+    # group by demeter crop assignment
+    us_grp = us_df.groupby('demeter_lc').sum()
+
+    # get only target lc
+    us_grp = us_grp.loc[us_grp.index == landclass].copy()
+
+    # plot GCAM
+    g = us_grp[yrs].T.plot(legend=False)
+
+    g.set(xlabel='Year',
+          ylabel=f"Land allocation (thous km)",
+          title=f"GCAM land allocation for {landclass} from {yrs[0]} through {yrs[-1]}")
+    g.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
+
+    return us_grp
+
+
+def gcam_to_demeter_lc_map():
+    """Mapping from GCAM land classes to Demeter land classes."""
+
+    return {'biomass': 'crops',
+                  'Corn': 'crops',
+                  'FiberCrop': 'crops',
+                  'FodderGrass': 'crops',
+                  'FodderHerb': 'crops',
+                  'Forest': 'forest',
+                  'ProtectedUnmanagedForest': 'forest',
+                  'Grassland': 'grass',
+                  'ProtectedGrassland': 'grass',
+                  'MiscCrop': 'crops',
+                  'OilCrop': 'crops',
+                  'OtherArableLand': 'crops',
+                  'OtherGrain': 'crops',
+                  'PalmFruit': 'crops',
+                  'Pasture': 'grass',
+                  'ProtectedUnmanagedPasture': 'grass',
+                  'Rice': 'crops',
+                  'Root_Tuber': 'crops',
+                  'Shrubland': 'shrub',
+                  'ProtectedShrubland': 'shrub',
+                  'Tundra': 'grass',
+                  'RockIceDesert': 'sparse',
+                  'SugarCrop': 'crops',
+                  'UnmanagedForest': 'forest',
+                  'UnmanagedPasture': 'grass',
+                  'UrbanLand': 'urban',
+                  'Wheat': 'crops'}
