@@ -57,7 +57,7 @@ def gcam_demeter_region(df, target_year, figure_size=(12, 8), metric_id_col='met
         title_adder = ''
     else:
         gcam_reg_df = gcam_reg_df.loc[gcam_reg_df[landclass_col].isin(landclass_list)]
-        title_adder = f"for land classes {','.join(landclass_list)}"
+        title_adder = f" for land classes {', '.join(landclass_list)}"
 
     # drop unneeded fields
     gcam_reg_df.drop(metric_id_col, inplace=True, axis=1)
