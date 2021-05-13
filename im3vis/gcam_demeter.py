@@ -100,7 +100,7 @@ def plot_conus_raster(boundary_gdf, demeter_gdf, landclass, target_year, font_sc
         burned = features.rasterize(shapes=shapes, fill=metadata['nodata'], out=out_arr, transform=out.transform)
         out.write_band(1, burned)
 
-        # open and visualize
+    # open and visualize
     with rasterio.open(rast) as src:
         fig, ax = plt.subplots(1, figsize=(10, 4))
 
@@ -135,22 +135,25 @@ def get_conus_metadata():
     r = rasterio.open(template_raster)
     meta = r.meta.copy()
     meta.update(compress='lzw')
+    r.close()
 
     return meta
 
 
-def plot_gcam_conus_basin(gcam_df, target_year, landclass):
+def plot_gcam_conus_basin(gcam_df, target_year, landclass, lc_mapping=None, default_mapping='standard'):
     """Generate a plot of GCAM land allocation by basin for the CONUS."""
 
     gxf = gpd.read_file(pkg_resources.resource_filename('im3vis', 'data/conus_basins.shp'))
 
-    lc_mapping = gcam_to_demeter_lc_map()
+    if lc_mapping is None:
+        lc_mapping = gcam_to_demeter_lc_map(setting=default_mapping)
 
     # only account for forest mapping for demonstration
     gcam_df['demeter_lc'] = gcam_df['landclass'].map(lc_mapping)
 
-    # only keep forest classes in the USA
-    gcam_df = gcam_df.loc[(gcam_df['demeter_lc'] == landclass) & (gcam_df['region'] == 'USA')].copy()
+    # only keep target classes in the USA
+    # gcam_df = gcam_df.loc[(gcam_df['demeter_lc'] == landclass) & (gcam_df['region'] == 'USA')].copy()
+    gcam_df = gcam_df.loc[(gcam_df['demeter_lc'].isin(landclass)) & (gcam_df['region'] == 'USA')].copy()
 
     # only keep what we need
     gcam_us = gcam_df[['metric_id', 'demeter_lc', target_year]].copy()
@@ -178,13 +181,13 @@ def plot_gcam_conus_basin(gcam_df, target_year, landclass):
     return mdf
 
 
-def plot_gcam_reclassified(gcam_df, landclass, start_yr=2015, through_yr=2100, interval=5):
-
+def plot_gcam_reclassified(gcam_df, landclass, start_yr=2015, through_yr=2100, interval=5, lc_mapping=None):
     """Plot GCAM landclass allocation over a time period reclassified to Demeter land cover types."""
 
     yrs = [str(i) for i in range(start_yr, through_yr + interval, interval)]
 
-    lc_mapping = gcam_to_demeter_lc_map()
+    if lc_mapping is None:
+        lc_mapping = gcam_to_demeter_lc_map()
 
     # US corn allocation through the end of the century
     us_df = gcam_df.loc[gcam_df['region'] == 'USA'].copy()
@@ -209,10 +212,14 @@ def plot_gcam_reclassified(gcam_df, landclass, start_yr=2015, through_yr=2100, i
     return us_grp
 
 
-def gcam_to_demeter_lc_map():
-    """Mapping from GCAM land classes to Demeter land classes."""
+def gcam_to_demeter_lc_map(setting='standard'):
+    """Mapping from GCAM land classes to Demeter land classes.
 
-    return {'biomass': 'crops',
+    :param setting:                 Describes the mapping dictionary needed. Options are "standard" or "crop_yield"
+
+    """
+
+    standard = {'biomass': 'crops',
                   'Corn': 'crops',
                   'FiberCrop': 'crops',
                   'FodderGrass': 'crops',
@@ -239,3 +246,47 @@ def gcam_to_demeter_lc_map():
                   'UnmanagedPasture': 'grass',
                   'UrbanLand': 'urban',
                   'Wheat': 'crops'}
+
+    crop_yield = {'Wheat_IRR': 'wheat_irr',
+                     'RootTuber_IRR': 'root_tuber_irr',
+                     'SugarCrop_IRR': 'sugarcrop_irr',
+                     'OilCrop_IRR': 'oilcrop_irr',
+                     'MiscCrop_IRR': 'misccrop_irr',
+                     'FodderHerb_IRR': 'fodderherb_irr',
+                     'Corn_IRR': 'corn_irr',
+                     'FiberCrop_IRR': 'fibercrop_irr',
+                     'FodderGrass_IRR': 'foddergrass_irr',
+                     'Rice_IRR': 'rice_irr',
+                     'OtherGrain_IRR': 'othergrain_irr',
+                     'Wheat_RFD': 'wheat_rfd',
+                     'RootTuber_RFD': 'root_tuber_rfd',
+                     'SugarCrop_RFD': 'sugarcrop_rfd',
+                     'OilCrop_RFD': 'oilcrop_rfd',
+                     'MiscCrop_RFD': 'misccrop_rfd',
+                     'FodderHerb_RFD': 'fodderherb_rfd',
+                     'Corn_RFD': 'corn_rfd',
+                     'FiberCrop_RFD': 'fibercrop_rfd',
+                     'FodderGrass_RFD': 'foddergrass_rfd',
+                     'Rice_RFD': 'rice_rfd',
+                     'OtherGrain_RFD': 'othergrain_rfd',
+                     'Forest': 'forest',
+                     'Grassland': 'grass',
+                     'OtherArableLand': 'otherarableland',
+                     'PalmFruit_IRR': 'palmfruit_irr',
+                     'PalmFruit_RFD': 'palmfruit_rfd',
+                     'Pasture': 'grass',
+                     'RockIceDesert': 'snow',
+                     'Shrubland': 'shrub',
+                     'UnmanagedForest': 'forest',
+                     'UnmanagedPasture': 'grass',
+                     'UrbanLand': 'urban',
+                     'biomassGrass_IRR': 'biomass_grass_irr',
+                     'biomassGrass_RFD': 'biomass_grass_rfd',
+                     'biomassTree_IRR': 'biomass_tree_irr',
+                     'biomassTree_RFD': 'biomass_tree_rfd',
+                     'Tundra': 'sparse'}
+
+    if setting == 'crop_yield':
+        return crop_yield
+    else:
+        return standard
