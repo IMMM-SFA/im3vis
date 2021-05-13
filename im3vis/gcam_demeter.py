@@ -107,16 +107,15 @@ def values_to_nan(arr, nan_less_than=None, nan_greater_than=None):
     return arr
 
 
-def plot_raster(boundary_gdf,
-                      demeter_gdf,
-                      landclass_list,
-                      target_year,
-                      font_scale=1.5,
-                      scope='conus',
-                      resolution='0.083333',
-                      value_to_nan=True,
-                      nan_less_than=0.01,
-                      nan_greater_than=None):
+def plot_raster(demeter_gdf,
+                landclass_list,
+                target_year,
+                font_scale=1.5,
+                scope='conus',
+                resolution='0.083333',
+                value_to_nan=True,
+                nan_less_than=0.01,
+                nan_greater_than=None):
     """Generate a raster plot from demeter outputs for the CONUS for a specified land class."""
 
     sns.set(font_scale=font_scale)
@@ -155,7 +154,8 @@ def plot_raster(boundary_gdf,
              title=f"Demeter land allocation for {landclass_list} for {target_year}")
 
         if scope == 'conus':
-            boundary_gdf.geometry.boundary.plot(ax=ax, color='grey', lw=0.4)
+            conus_gdf = gpd.read_file(pkg_resources.resource_filename('im3vis', "data/ne_50m_conus.shp"))
+            conus_gdf.geometry.boundary.plot(ax=ax, color='grey', lw=0.4)
         else:
             world_gdf = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
             world_gdf.geometry.boundary.plot(ax=ax, color='grey', lw=0.4)
@@ -163,8 +163,7 @@ def plot_raster(boundary_gdf,
         return src
 
 
-def plot_demeter_raster(boundary_gdf,
-                        demeter_gdf,
+def plot_demeter_raster(demeter_gdf,
                         landclass_list,
                         target_year,
                         font_scale=1.5,
@@ -179,8 +178,7 @@ def plot_demeter_raster(boundary_gdf,
     if scope == 'conus':
         demeter_gdf = demeter_gdf.loc[demeter_gdf['region_id'] == 1].copy()
 
-    src = plot_raster(boundary_gdf=boundary_gdf,
-                      demeter_gdf=demeter_gdf,
+    src = plot_raster(demeter_gdf=demeter_gdf,
                       landclass_list=landclass_list,
                       target_year=target_year,
                       font_scale=font_scale,
