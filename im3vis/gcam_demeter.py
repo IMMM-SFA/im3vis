@@ -1,6 +1,7 @@
 import tempfile
 import pkg_resources
 
+import numpy as np
 import pandas as pd
 import seaborn as sns; sns.set()
 import geopandas as gpd
@@ -79,8 +80,42 @@ def gcam_demeter_region(df, target_year, figure_size=(12, 8), metric_id_col='met
     return g
 
 
-def plot_conus_raster(boundary_gdf, demeter_gdf, landclass_list, target_year, font_scale=1.5, scope='conus',
-                      resolution='0.083333'):
+def values_to_nan(arr, nan_less_than=None, nan_greater_than=None):
+    """Convert array values to nan where greater than or less than prescribed values.
+
+    :param arr:                     Array or Series of data
+    :type arr:                      ndarray
+
+    :param nan_less_than:           Value that all values in array less than will be converted to NaN
+    :type nan_less_than:            float
+
+    :param nan_greater_than:        Value that all values in array greater than will be converted to NaN
+    :type nan_greater_than:         float
+
+    :return:                        ndarray
+
+    """
+
+    # make all values less than target value nan
+    if nan_less_than is not None:
+        arr = np.where(arr < nan_less_than, np.nan, arr)
+
+    if nan_greater_than is not None:
+        arr = np.where(arr > nan_greater_than, np.nan, arr)
+
+    return arr
+
+
+def plot_raster(boundary_gdf,
+                      demeter_gdf,
+                      landclass_list,
+                      target_year,
+                      font_scale=1.5,
+                      scope='conus',
+                      resolution='0.083333',
+                      value_to_nan=True,
+                      nan_less_than=0.01,
+                      nan_greater_than=None):
     """Generate a raster plot from demeter outputs for the CONUS for a specified land class."""
 
     sns.set(font_scale=font_scale)
@@ -89,9 +124,17 @@ def plot_conus_raster(boundary_gdf, demeter_gdf, landclass_list, target_year, fo
     temp_file = tempfile.NamedTemporaryFile(suffix='.tif')
     rast = temp_file.name
 
-    # create a generator of geom, value pairs to use in rasterizing
-    shapes = ((geom, value) for geom, value in zip(demeter_gdf.geometry, demeter_gdf[landclass_list]))
+    # sum the target landclasses by each grid cell
+    target_data = demeter_gdf[landclass_list].sum(axis=1)
 
+    # convert value ranges to nan if so desired
+    if value_to_nan:
+        target_data = values_to_nan(target_data, nan_less_than=nan_less_than, nan_greater_than=nan_greater_than)
+
+    # create a generator of geom, value pairs to use in
+    shapes = ((geom, value) for geom, value in zip(demeter_gdf.geometry, target_data))
+
+    # get raster metadata to use as a template
     metadata = get_metadata(scope, resolution)
 
     # burn point values in to raster
@@ -101,18 +144,52 @@ def plot_conus_raster(boundary_gdf, demeter_gdf, landclass_list, target_year, fo
         burned = features.rasterize(shapes=shapes, fill=metadata['nodata'], out=out_arr, transform=out.transform)
         out.write_band(1, burned)
 
-        # open and visualize
+    # open and visualize
     with rasterio.open(rast) as src:
         fig, ax = plt.subplots(1, figsize=(10, 4))
-
-        boundary_gdf.geometry.boundary.plot(ax=ax, color='grey', lw=0.4)
 
         show(src,
              cmap='YlGn',
              ax=ax,
              title=f"Demeter land allocation for {landclass_list} for {target_year}")
 
+        if scope == 'conus':
+            boundary_gdf.geometry.boundary.plot(ax=ax, color='grey', lw=0.4)
+        else:
+            world_gdf = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
+            world_gdf.geometry.boundary.plot(ax=ax, color='grey', lw=0.4)
+
         return src
+
+
+def plot_demeter_raster(boundary_gdf,
+                        demeter_gdf,
+                        landclass_list,
+                        target_year,
+                        font_scale=1.5,
+                        scope='conus',
+                        resolution='0.083333',
+                        value_to_nan=True,
+                        nan_less_than=0.01,
+                        nan_greater_than=None):
+    """Generate a raster plot from demeter outputs for a specified land class over a specified scope and resolution."""
+
+    # filter out the CONUS data from demeter
+    if scope == 'conus':
+        demeter_gdf = demeter_gdf.loc[demeter_gdf['region_id'] == 1].copy()
+
+    src = plot_raster(boundary_gdf=boundary_gdf,
+                      demeter_gdf=demeter_gdf,
+                      landclass_list=landclass_list,
+                      target_year=target_year,
+                      font_scale=font_scale,
+                      scope=scope,
+                      resolution=resolution,
+                      value_to_nan=value_to_nan,
+                      nan_less_than=nan_less_than,
+                      nan_greater_than=nan_greater_than)
+
+    return src
 
 
 def build_geodataframe(demeter_file, longitude_col='longitude', latitude_col='latitude', crs='epsg:4326'):
