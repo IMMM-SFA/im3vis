@@ -193,11 +193,14 @@ def plot_demeter_raster(boundary_gdf,
     return src
 
 
-def build_geodataframe(demeter_file, longitude_col='longitude', latitude_col='latitude', crs='epsg:4326'):
+def build_geodataframe(demeter_data, longitude_col='longitude', latitude_col='latitude', crs='epsg:4326'):
     """Build a geodataframe from a pandas data frame containing coordinates"""
 
-    # read in as pandas data frame
-    df = pd.read_csv(demeter_file)
+    # check to see if input object is a file path
+    if isinstance(demeter_data, str):
+        df = pd.read_csv(demeter_data)
+    else:
+        df = demeter_data.copy()
 
     # create geometry column from coordinate fields
     geometry = [Point(xy) for xy in zip(df[longitude_col], df[latitude_col])]
