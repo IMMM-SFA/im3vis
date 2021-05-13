@@ -79,7 +79,8 @@ def gcam_demeter_region(df, target_year, figure_size=(12, 8), metric_id_col='met
     return g
 
 
-def plot_conus_raster(boundary_gdf, demeter_gdf, landclass, target_year, font_scale=1.5):
+def plot_conus_raster(boundary_gdf, demeter_gdf, landclass_list, target_year, font_scale=1.5, scope='conus',
+                      resolution='0.083333'):
     """Generate a raster plot from demeter outputs for the CONUS for a specified land class."""
 
     sns.set(font_scale=font_scale)
@@ -89,9 +90,9 @@ def plot_conus_raster(boundary_gdf, demeter_gdf, landclass, target_year, font_sc
     rast = temp_file.name
 
     # create a generator of geom, value pairs to use in rasterizing
-    shapes = ((geom, value) for geom, value in zip(demeter_gdf.geometry, demeter_gdf[landclass]))
+    shapes = ((geom, value) for geom, value in zip(demeter_gdf.geometry, demeter_gdf[landclass_list]))
 
-    metadata = get_conus_metadata()
+    metadata = get_metadata(scope, resolution)
 
     # burn point values in to raster
     with rasterio.open(rast, 'w+', **metadata) as out:
@@ -100,7 +101,7 @@ def plot_conus_raster(boundary_gdf, demeter_gdf, landclass, target_year, font_sc
         burned = features.rasterize(shapes=shapes, fill=metadata['nodata'], out=out_arr, transform=out.transform)
         out.write_band(1, burned)
 
-    # open and visualize
+        # open and visualize
     with rasterio.open(rast) as src:
         fig, ax = plt.subplots(1, figsize=(10, 4))
 
@@ -109,7 +110,7 @@ def plot_conus_raster(boundary_gdf, demeter_gdf, landclass, target_year, font_sc
         show(src,
              cmap='YlGn',
              ax=ax,
-             title=f"Demeter land allocation for {landclass} for {target_year}")
+             title=f"Demeter land allocation for {landclass_list} for {target_year}")
 
         return src
 
@@ -127,33 +128,50 @@ def build_geodataframe(demeter_file, longitude_col='longitude', latitude_col='la
     return gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
 
 
-def get_conus_metadata():
-    """Get CONUS metadata from template raster."""
+def get_metadata(scope='conus', resolution='0.083333'):
+    """Get metadata from template raster."""
 
-    template_raster = pkg_resources.resource_filename('im3vis', 'data/demeter_conus_template.tif')
+    scope = scope.lower()
+
+    if scope == 'conus' and resolution == '0.083333':
+        template_raster = pkg_resources.resource_filename('im3vis', 'data/demeter_conus_template.tif')
+    elif scope == 'conus' and resolution == '0.5':
+        template_raster = pkg_resources.resource_filename('im3vis', 'data/demeter_conus_template_0p5deg.tif')
+    elif scope == 'global' and resolution == '0.5':
+        template_raster = pkg_resources.resource_filename('im3vis', 'data/demeter_global_template_0p5deg.tif')
+    else:
+        msg = f"No raster template available for {scope} with a resolution of {resolution}"
+        raise ValueError(msg)
 
     r = rasterio.open(template_raster)
     meta = r.meta.copy()
     meta.update(compress='lzw')
-    r.close()
 
     return meta
 
 
-def plot_gcam_conus_basin(gcam_df, target_year, landclass, lc_mapping=None, default_mapping='standard'):
-    """Generate a plot of GCAM land allocation by basin for the CONUS."""
+def plot_gcam_conus_basin(gcam_df, target_year, landclass_list, setting='standard'):
+    """Generate a plot of GCAM land allocation by basin for the CONUS.
+
+    @param target_year:                 The target year of interest as a four digit string. E.g., "2015"
+    @type target_year:                  str
+
+    @param landclass_list:              A list of land classes to combineand map
+    @type landclass_list:               list
+
+    """
+
+    landclass_list = [i.lower() for i in landclass_list]
 
     gxf = gpd.read_file(pkg_resources.resource_filename('im3vis', 'data/conus_basins.shp'))
 
-    if lc_mapping is None:
-        lc_mapping = gcam_to_demeter_lc_map(setting=default_mapping)
+    lc_mapping = gcam_to_demeter_lc_map(setting=setting)
 
     # only account for forest mapping for demonstration
     gcam_df['demeter_lc'] = gcam_df['landclass'].map(lc_mapping)
 
-    # only keep target classes in the USA
-    # gcam_df = gcam_df.loc[(gcam_df['demeter_lc'] == landclass) & (gcam_df['region'] == 'USA')].copy()
-    gcam_df = gcam_df.loc[(gcam_df['demeter_lc'].isin(landclass)) & (gcam_df['region'] == 'USA')].copy()
+    # only keep forest classes in the USA
+    gcam_df = gcam_df.loc[(gcam_df['demeter_lc'].isin(landclass_list)) & (gcam_df['region'] == 'USA')].copy()
 
     # only keep what we need
     gcam_us = gcam_df[['metric_id', 'demeter_lc', target_year]].copy()
@@ -174,20 +192,20 @@ def plot_gcam_conus_basin(gcam_df, target_year, landclass, lc_mapping=None, defa
              legend=True,
              figsize=(15, 10),
              edgecolor='grey',
-             legend_kwds={'label': f"GCAM land allocation for {landclass} in {target_year} (thous km)",
+             legend_kwds={'label': f"GCAM land allocation for {landclass_list} in {target_year} (thous km)",
                           'orientation': "horizontal"},
              cmap='viridis')
 
     return mdf
 
 
-def plot_gcam_reclassified(gcam_df, landclass, start_yr=2015, through_yr=2100, interval=5, lc_mapping=None):
+def plot_gcam_reclassified(gcam_df, landclass, start_yr=2015, through_yr=2100, interval=5):
+
     """Plot GCAM landclass allocation over a time period reclassified to Demeter land cover types."""
 
     yrs = [str(i) for i in range(start_yr, through_yr + interval, interval)]
 
-    if lc_mapping is None:
-        lc_mapping = gcam_to_demeter_lc_map()
+    lc_mapping = gcam_to_demeter_lc_map()
 
     # US corn allocation through the end of the century
     us_df = gcam_df.loc[gcam_df['region'] == 'USA'].copy()
