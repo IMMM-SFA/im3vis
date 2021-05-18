@@ -229,28 +229,47 @@ def get_metadata(scope='conus', resolution='0.083333'):
     return meta
 
 
-def plot_gcam_conus_basin(gcam_df, target_year, landclass_list, setting='standard'):
-    """Generate a plot of GCAM land allocation by basin for the CONUS.
+def plot_gcam_basin(gcam_df, target_year, landclass_list, setting='standard', scope='conus'):
+    """Generate a plot of GCAM land allocation by basin for the globe.
 
-    @param target_year:                 The target year of interest as a four digit string. E.g., "2015"
-    @type target_year:                  str
+    :param gcam_df:                     The data frame containing the GCAM projected data
+    :type gcam_df:                      DataFrame
 
-    @param landclass_list:              A list of land classes to combineand map
-    @type landclass_list:               list
+    :param target_year:                 The target year of interest as a four digit string. E.g., "2015"
+    :type target_year:                  str
+
+    :param landclass_list:              A list of land classes to combine and map
+    :type landclass_list:               list
+
+    :param setting:                     The land class mapping to use per 'gcam_to_demeter_lc_map'
+    :type setting:                      str
+
+    :param scope:                       Either 'conus' or 'global' currently
+    :type scope:                        str
 
     """
 
     landclass_list = [i.lower() for i in landclass_list]
 
-    gxf = gpd.read_file(pkg_resources.resource_filename('im3vis', 'data/conus_basins.shp'))
+    # basins shapefile
+    if scope == 'conus':
+        shp = pkg_resources.resource_filename('im3vis', 'data/conus_basins.shp')
+    else:
+        shp = pkg_resources.resource_filename('im3vis', 'data/basin_boundaries_moirai_combined_3p1_0p5arcmin.shp')
+
+    # read boundaries in as a geodataframe
+    gxf = gpd.read_file(shp)
 
     lc_mapping = gcam_to_demeter_lc_map(setting=setting)
 
     # only account for forest mapping for demonstration
     gcam_df['demeter_lc'] = gcam_df['landclass'].map(lc_mapping)
 
-    # only keep forest classes in the USA
-    gcam_df = gcam_df.loc[(gcam_df['demeter_lc'].isin(landclass_list)) & (gcam_df['region'] == 'USA')].copy()
+    # get data that the user wants
+    if scope == 'conus':
+        gcam_df = gcam_df.loc[(gcam_df['demeter_lc'].isin(landclass_list)) & (gcam_df['region'] == 'USA')].copy()
+    else:
+        gcam_df = gcam_df.loc[(gcam_df['demeter_lc'].isin(landclass_list))].copy()
 
     # only keep what we need
     gcam_us = gcam_df[['metric_id', 'demeter_lc', target_year]].copy()
@@ -265,12 +284,19 @@ def plot_gcam_conus_basin(gcam_df, target_year, landclass_list, setting='standar
     # merge with spatial boundaries
     mdf = gxf.merge(grp_us, on='basin_id')
 
+    # set linewidth for plot scope
+    if scope == 'conus':
+        lw = 1
+    else:
+        lw = 0.2
+
     fig, ax = plt.subplots(1, 1)
     mdf.plot(column=target_year,
              ax=ax,
              legend=True,
              figsize=(15, 10),
              edgecolor='grey',
+             linewidth=lw,
              legend_kwds={'label': f"GCAM land allocation for {landclass_list} in {target_year} (thous km)",
                           'orientation': "horizontal"},
              cmap='viridis')
