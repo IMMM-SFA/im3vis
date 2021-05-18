@@ -1,3 +1,6 @@
+[![DOI](https://zenodo.org/badge/309786811.svg)](https://zenodo.org/badge/latestdoi/309786811)
+
+
 # im3vis
 General plotting functions for IM3 modeling needs
 
